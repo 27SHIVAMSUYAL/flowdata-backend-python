@@ -1,18 +1,29 @@
 from fastapi import APIRouter, HTTPException, Depends
-from models.adminModels import Auth, Admin , _now_ts
+from models.adminModels import Auth, Admin, _now_ts
 from models.studentModels import Student
 from configuration.mongoDbConfig import db
 from passlib.context import CryptContext
 from services.authentication import create_access_token, verify_admin
 from datetime import datetime
+
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 @router.post("/admin-signup")
 def admin_signup(res: Admin):
-    existing_admin = db.admin.find_one({"username": res.username})
+    existing_admin = db.admin.find_one({
+        "$or": [
+            {"username": res.username},
+            {"email": res.email}
+        ]
+    })
+
     if existing_admin:
-        raise HTTPException(status_code=400, detail="Admin already exists")
+        if existing_admin.get("username") == res.username:
+            raise HTTPException(status_code=400, detail="Username already exists")
+        if existing_admin.get("email") == res.email:
+            raise HTTPException(status_code=400, detail="Email already exists")
 
     hashed_password = pwd_context.hash(res.password)
     admin_doc = {
@@ -49,7 +60,6 @@ def admin_dashboard(current_admin: dict = Depends(verify_admin)):
     return {"message": f"Welcome, {current_admin['username']}! This is your admin dashboard."}
 
 
-
 @router.post("/admin-add-student")
 def add_student(student: Student, current_admin: dict = Depends(verify_admin)):
     db.students.insert_one(student.model_dump())
@@ -62,6 +72,7 @@ def delete_student(student_id: int, current_admin: dict = Depends(verify_admin))
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Student not found")
     return {"message": "Student deleted successfully"}
+
 
 @router.put("/admin-update-student/{student_id}")
 def update_student(student_id: int, student: Student, current_admin: dict = Depends(verify_admin)):

@@ -4,6 +4,10 @@ from typing import List, Optional
 from configuration.mongoDbConfig import db
 from models.studentModels import Student
 from services.authentication import get_current_user
+from pymongo import ASCENDING, DESCENDING
+import re
+
+
 router = APIRouter()
 
 
@@ -21,29 +25,47 @@ def get_student_by_id(student_id: int, current_user: dict = Depends(get_current_
     return student
 
 
-@router.get("/students", response_model=List[Student])
+@router.get("/students")
 def get_students(
         current_user: dict = Depends(get_current_user),
         grade: Optional[str] = Query(None, description="Filter by grade"),
         name: Optional[str] = Query(None, description="Search by name"),
-        roll_no: Optional[int] = Query(None, description="Search by roll number")
+        roll_no: Optional[int] = Query(None, description="Search by roll number"),
+        sort_by: Optional[str] = Query("id", description="Sort by field (e.g., id, name, roll_no, age, grade)"),
+        sort_order: Optional[str] = Query("asc", description="Sort order: asc or desc"),
+        page: int = Query(1, ge=1, description="Page number"),
+        limit: int = Query(10, ge=1, le=100, description="Records per page")
 ):
     query = {}
 
-    # Filter by grade
+    # Apply filters
     if grade:
         query["grade"] = grade
-
-    # Search by name
     if name:
         query["name"] = {"$regex": name, "$options": "i"}
-
-    # Search by roll number
     if roll_no:
         query["roll_no"] = roll_no
 
-    students = list(db.students.find(query, {"_id": 0}))
-    return students
+    # sort direction
+    sort_direction = ASCENDING if sort_order.lower() == "asc" else DESCENDING
 
+    # Pagination calculations
+    skip = (page - 1) * limit
 
+    # Total count before pagination
+    total_count = db.students.count_documents(query)
 
+    # Fetch paginated & sorted results
+    students = list(
+        db.students.find(query, {"_id": 0})
+        .sort(sort_by, sort_direction)
+        .skip(skip)
+        .limit(limit)
+    )
+
+    return {
+        "total_records": total_count,
+        "page": page,
+        "limit": limit,
+        "students": students
+    }
