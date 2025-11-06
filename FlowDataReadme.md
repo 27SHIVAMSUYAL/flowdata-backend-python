@@ -29,7 +29,9 @@
 
 ---
 
-## ✨ Features
+## ✨ Key Features
+- **Sorting ,  Searching , Pagination**: Clean and well-documented API endpoints
+
 
 ### 🔐 Authentication & Authorization
 - JWT-based authentication with role claims
